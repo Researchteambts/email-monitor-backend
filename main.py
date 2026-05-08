@@ -89,6 +89,7 @@ def list_emails(db: Session = Depends(get_db)):
             "received_at":  e.received_at,
             "forwarded_at": e.forwarded_at,
             "status":       e.status,
+            "folder":       e.folder
         }
         for e in emails
     ]
@@ -102,6 +103,7 @@ def list_emails_by_account(account_id: int, db: Session = Depends(get_db)):
     return [
         {
             "id":           e.id,
+            "account_id":   e.account_id,
             "uid":          e.uid,
             "from":         e.from_address,
             "subject":      e.subject,

@@ -52,16 +52,18 @@ def save_email(
     subject: str,
     body: str,
     received_at: str,
-    status: str = "forwarded"
+    status: str = "forwarded",
+    folder: str = "inbox"
 ):
     entry = Email(
         account_id   = account_id,
         uid          = uid,
         from_address = from_address,
         subject      = subject,
-        body         = body[:500],
+        body         = body,
         received_at  = received_at,
         status       = status,
+        folder      = folder
     )
     db.add(entry)
     db.commit()

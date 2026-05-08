@@ -37,7 +37,8 @@ class Email(Base):
     from_address = Column(Text)
     subject      = Column(Text)
     body         = Column(Text)
-    received_at  = Column(Text)
+    received_at = Column(DateTime(timezone=True), nullable=True)
+    folder = Column(Text, default="inbox") 
     forwarded_at = Column(DateTime(timezone=True), server_default=func.now())
     status       = Column(Text, default="forwarded")
 

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from database import SessionLocal
 import crud
-
+import re 
 load_dotenv()
 
 # ── Central inbox (from .env) ─────────────────────────────────────────────
@@ -17,8 +17,8 @@ YOUR_PASSWORD = os.getenv("YOUR_PASSWORD")
 YOUR_PROVIDER = os.getenv("YOUR_PROVIDER", "gmail")
 
 # ── Config ────────────────────────────────────────────────────────────────
-CHECK_INTERVAL = 5 * 60      # every 5 minutes
-LOOKBACK_DAYS  = 7
+CHECK_INTERVAL = 1 * 60      # every 5 minutes
+LOOKBACK_DAYS  = 5
 
 IMAP_SERVERS = {
     "gmail":   ("imap.gmail.com",        993),
@@ -31,6 +31,10 @@ SMTP_SERVERS = {
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+def clean_body(body: str) -> str:
+    body = re.sub(r'<[^>]+>', '', body)       # strip HTML tags
+    body = re.sub(r'\s+', ' ', body).strip()  # collapse whitespace
+    return body
 
 def extract_body(msg) -> str:
     body = ""
@@ -43,7 +47,8 @@ def extract_body(msg) -> str:
                 break
     else:
         body = msg.get_payload(decode=True).decode(errors="replace")
-    return body.strip()
+    
+    return clean_body(body.strip())
 
 
 def build_forward(original_msg, monitored_email: str) -> MIMEMultipart:
@@ -138,56 +143,58 @@ def check_account(account, db):
     try:
         mail = imaplib.IMAP4_SSL(imap_host, imap_port)
         mail.login(mail_email, mail_pass)
-        mail.select("inbox")
-
-        since_date = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%b-%Y")
-        _, data    = mail.search(None, f'(UNSEEN SINCE "{since_date}")')
-        uids       = data[0].split()
-
-        if not uids:
-            print(f"    No new mail.")
-            mail.logout()
-            return
-
-        for uid in uids:
-            uid_str = uid.decode()
-
-            if crud.is_uid_seen(db, account_id, uid_str):
+        folders = ["inbox","INBOX","[Gmail]/Spam"] if provider == "gmail" else ["inbox", "Junk"]
+        for folder in folders:
+            try:
+                result, _ = mail.select(folder)
+                if result != "OK":
+                    print(f"    Skipping folder {folder} (not found)")
+                    continue
+            except Exception:
+                print(f"    Skipping folder {folder} (error)")
                 continue
 
-            _, msg_data  = mail.fetch(uid, "(RFC822)")
-            original_msg = email.message_from_bytes(msg_data[0][1])
+            since_date = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%b-%Y")
+            _, data    = mail.search(None, f'(UNSEEN SINCE "{since_date}")')
+            uids       = data[0].split()
 
-            subject     = original_msg.get("Subject", "(no subject)")
-            sender      = original_msg.get("From",    "unknown")
-            received_at = original_msg.get("Date",    "")
-            body        = extract_body(original_msg)
+            if not uids:
+                print(f"    No new mail in {folder}.")
+                continue
 
-            print(f"    New email: {subject}")
+            for uid in uids:
+                uid_str = uid.decode()
 
-            # Step 1 — forward to YOUR_EMAIL
-            forward_msg = build_forward(original_msg, mail_email)
-            forwarded   = send_forward(forward_msg)
+                if crud.is_uid_seen(db, account_id, uid_str):
+                    continue
 
-            # Step 2 — save to DB regardless of forward result
-            crud.save_email(
-                db           = db,
-                account_id   = account_id,
-                uid          = uid_str,
-                from_address = sender,
-                subject      = subject,
-                body         = body,
-                received_at  = received_at,
-                status       = "forwarded" if forwarded else "forward_failed"
-            )
+                _, msg_data  = mail.fetch(uid, "(RFC822)")
+                original_msg = email.message_from_bytes(msg_data[0][1])
 
-            if forwarded:
-                print(f"    Saved to DB + forwarded to {YOUR_EMAIL} ✓")
-            else:
-                print(f"    Saved to DB but forward FAILED — will retry next cycle.")
+                subject     = original_msg.get("Subject", "(no subject)")
+                sender      = original_msg.get("From",    "unknown")
+                received_at = original_msg.get("Date",    "")
+                body        = extract_body(original_msg)
+
+                print(f"    [{folder}] New email: {subject}")
+
+                forward_msg = build_forward(original_msg, mail_email)
+                forwarded   = send_forward(forward_msg)
+
+                crud.save_email(
+                    db           = db,
+                    account_id   = account_id,
+                    uid          = uid_str,
+                    from_address = sender,
+                    subject      = subject,
+                    body         = body,
+                    received_at  = received_at,
+                    status       = "forwarded" if forwarded else "forward_failed",
+                    folder       = folder
+                )
 
         mail.logout()
-
+        #
     except imaplib.IMAP4.error as e:
         print(f"  [IMAP error] {mail_email}: {e}")
     except Exception as e:
