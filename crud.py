@@ -35,6 +35,13 @@ def delete_account(db: Session, account_id: int):
         db.commit()
     return acc
 
+def delete_email(db, email_id: int):
+    email = db.query(Email).filter(Email.id == email_id).first()
+    if not email:
+        return None
+    db.delete(email)
+    db.commit()
+    return email
 
 # ── Emails ────────────────────────────────────────────────────────────────
 

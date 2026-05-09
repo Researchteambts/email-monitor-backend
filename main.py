@@ -73,6 +73,12 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": f"Account {account_id} deleted"}
 
+@app.delete("/api/emails/{email_id}")
+def delete_email(email_id: int, db: Session = Depends(get_db)):
+    email = crud.delete_email(db, email_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return {"message": f"Email {email_id} deleted"}
 
 # ── Email routes ──────────────────────────────────────────────────────────
 @app.get("/api/emails")
