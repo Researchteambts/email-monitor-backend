@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import Account, Email
+from models import Account, Email, Notification
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────
@@ -35,15 +35,16 @@ def delete_account(db: Session, account_id: int):
         db.commit()
     return acc
 
-def delete_email(db, email_id: int):
+
+# ── Emails ────────────────────────────────────────────────────────────────
+
+def delete_email(db: Session, email_id: int):
     email = db.query(Email).filter(Email.id == email_id).first()
     if not email:
         return None
     db.delete(email)
     db.commit()
     return email
-
-# ── Emails ────────────────────────────────────────────────────────────────
 
 def is_uid_seen(db: Session, account_id: int, uid: str) -> bool:
     return db.query(Email).filter(
@@ -70,7 +71,7 @@ def save_email(
         body         = body,
         received_at  = received_at,
         status       = status,
-        folder      = folder
+        folder       = folder
     )
     db.add(entry)
     db.commit()
@@ -93,6 +94,7 @@ def get_emails_by_account(db: Session, account_id: int, limit: int = 200):
         .limit(limit)
         .all()
     )
+
 def mark_email_read(db: Session, email_id: int, is_read: bool = True):
     entry = db.query(Email).filter(Email.id == email_id).first()
     if not entry:
@@ -105,11 +107,10 @@ def mark_email_read(db: Session, email_id: int, is_read: bool = True):
 def get_unread_count(db: Session, account_id: int) -> int:
     return db.query(Email).filter(
         Email.account_id == account_id,
-        Email.is_read == False
+        Email.is_read    == False
     ).count()
 
 def get_failed_emails(db: Session):
-    """Fetch emails that failed to forward — for retry logic."""
     return db.query(Email).filter(Email.status == "forward_failed").all()
 
 def mark_email_forwarded(db: Session, email_id: int):
@@ -118,3 +119,46 @@ def mark_email_forwarded(db: Session, email_id: int):
         entry.status = "forwarded"
         db.commit()
     return entry
+
+
+# ── Notifications ─────────────────────────────────────────────────────────
+
+def create_notification(
+    db: Session,
+    account_id: int,
+    account_email: str,
+    from_address: str,
+    subject: str,
+    email_id: int | None = None,
+):
+    notif = Notification(
+        account_id    = account_id,
+        email_id      = email_id,
+        account_email = account_email,
+        from_address  = from_address,
+        subject       = subject,
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(notif)
+    return notif
+
+def get_all_notifications(db: Session, limit: int = 50):
+    return (
+        db.query(Notification)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+def mark_notification_seen(db: Session, notification_id: int):
+    notif = db.query(Notification).filter(Notification.id == notification_id).first()
+    if notif:
+        notif.is_seen = True
+        db.commit()
+        db.refresh(notif)
+    return notif
+
+def clear_all_notifications(db: Session):
+    db.query(Notification).delete()
+    db.commit()

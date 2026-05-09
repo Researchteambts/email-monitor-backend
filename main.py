@@ -28,6 +28,7 @@ def start_monitor():
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────
+
 class AccountIn(BaseModel):
     email:    str
     password: str
@@ -39,7 +40,16 @@ class ToggleIn(BaseModel):
 class ReadIn(BaseModel):
     is_read: bool
 
+class NotificationIn(BaseModel):
+    account_id:    int
+    account_email: str
+    from_address:  str
+    subject:       str
+    email_id:      int | None = None
+
+
 # ── Account routes ────────────────────────────────────────────────────────
+
 @app.get("/api/accounts")
 def list_accounts(db: Session = Depends(get_db)):
     accounts = crud.get_all_accounts(db)
@@ -52,8 +62,7 @@ def list_accounts(db: Session = Depends(get_db)):
             "created_at":   acc.created_at,
             "unread_count": crud.get_unread_count(db, acc.id),
             "total_emails": len(acc.emails),
-            # main.py — list_accounts, change just this one line
-            "last_active": max(
+            "last_active":  max(
                 (e.received_at for e in acc.emails if e.received_at),
                 default=None
             ).isoformat() if any(e.received_at for e in acc.emails) else None,
@@ -73,13 +82,6 @@ def toggle_account(account_id: int, body: ToggleIn, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": "Updated", "is_active": acc.is_active}
 
-@app.patch("/api/emails/{email_id}/read")
-def mark_email_read(email_id: int, body: ReadIn, db: Session = Depends(get_db)):
-    email = crud.mark_email_read(db, email_id, body.is_read)
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
-    return {"message": "Updated", "is_read": email.is_read}
-
 @app.delete("/api/accounts/{account_id}")
 def delete_account(account_id: int, db: Session = Depends(get_db)):
     acc = crud.delete_account(db, account_id)
@@ -87,14 +89,9 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": f"Account {account_id} deleted"}
 
-@app.delete("/api/emails/{email_id}")
-def delete_email(email_id: int, db: Session = Depends(get_db)):
-    email = crud.delete_email(db, email_id)
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
-    return {"message": f"Email {email_id} deleted"}
 
 # ── Email routes ──────────────────────────────────────────────────────────
+
 @app.get("/api/emails")
 def list_emails(db: Session = Depends(get_db)):
     emails = crud.get_all_emails(db)
@@ -137,3 +134,61 @@ def list_emails_by_account(account_id: int, db: Session = Depends(get_db)):
         }
         for e in emails
     ]
+
+@app.patch("/api/emails/{email_id}/read")
+def mark_email_read(email_id: int, body: ReadIn, db: Session = Depends(get_db)):
+    email = crud.mark_email_read(db, email_id, body.is_read)
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return {"message": "Updated", "is_read": email.is_read}
+
+@app.delete("/api/emails/{email_id}")
+def delete_email(email_id: int, db: Session = Depends(get_db)):
+    email = crud.delete_email(db, email_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return {"message": f"Email {email_id} deleted"}
+
+
+# ── Notification routes ───────────────────────────────────────────────────
+
+@app.get("/api/notifications")
+def list_notifications(db: Session = Depends(get_db)):
+    notifs = crud.get_all_notifications(db)
+    return [
+        {
+            "id":            n.id,
+            "account_id":    n.account_id,
+            "email_id":      n.email_id,
+            "account_email": n.account_email,
+            "from":          n.from_address,
+            "subject":       n.subject,
+            "is_seen":       n.is_seen,
+            "created_at":    n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in notifs
+    ]
+
+@app.post("/api/notifications")
+def create_notification(body: NotificationIn, db: Session = Depends(get_db)):
+    notif = crud.create_notification(
+        db,
+        account_id    = body.account_id,
+        account_email = body.account_email,
+        from_address  = body.from_address,
+        subject       = body.subject,
+        email_id      = body.email_id,
+    )
+    return {"message": "Created", "id": notif.id}
+
+@app.patch("/api/notifications/{notification_id}/seen")
+def mark_notification_seen(notification_id: int, db: Session = Depends(get_db)):
+    notif = crud.mark_notification_seen(db, notification_id)
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Marked seen", "id": notif.id}
+
+@app.delete("/api/notifications")
+def clear_notifications(db: Session = Depends(get_db)):
+    crud.clear_all_notifications(db)
+    return {"message": "All notifications cleared"}
