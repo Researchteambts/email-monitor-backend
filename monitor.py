@@ -144,7 +144,7 @@ def check_account(account, db):
     try:
         mail = imaplib.IMAP4_SSL(imap_host, imap_port)
         mail.login(mail_email, mail_pass)
-        folders = ["inbox","INBOX","[Gmail]/Spam"] if provider == "gmail" else ["inbox", "Junk"]
+        folders = ["inbox","[Gmail]/Spam"] if provider == "gmail" else ["inbox", "Junk"]
         for folder in folders:
             try:
                 result, _ = mail.select(folder)

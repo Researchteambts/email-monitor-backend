@@ -52,7 +52,11 @@ def list_accounts(db: Session = Depends(get_db)):
             "created_at":   acc.created_at,
             "unread_count": crud.get_unread_count(db, acc.id),
             "total_emails": len(acc.emails),
-            "last_active":  acc.emails[0].received_at.isoformat() if acc.emails and acc.emails[0].received_at else None,
+            # main.py — list_accounts, change just this one line
+            "last_active": max(
+                (e.received_at for e in acc.emails if e.received_at),
+                default=None
+            ).isoformat() if any(e.received_at for e in acc.emails) else None,
         }
         for acc in accounts
     ]
