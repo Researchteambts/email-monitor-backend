@@ -93,6 +93,20 @@ def get_emails_by_account(db: Session, account_id: int, limit: int = 200):
         .limit(limit)
         .all()
     )
+def mark_email_read(db: Session, email_id: int, is_read: bool = True):
+    entry = db.query(Email).filter(Email.id == email_id).first()
+    if not entry:
+        return None
+    entry.is_read = is_read
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+def get_unread_count(db: Session, account_id: int) -> int:
+    return db.query(Email).filter(
+        Email.account_id == account_id,
+        Email.is_read == False
+    ).count()
 
 def get_failed_emails(db: Session):
     """Fetch emails that failed to forward — for retry logic."""

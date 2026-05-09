@@ -41,7 +41,7 @@ class Email(Base):
     folder = Column(Text, default="inbox") 
     forwarded_at = Column(DateTime(timezone=True), server_default=func.now())
     status       = Column(Text, default="forwarded")
-
+    is_read = Column(Boolean, default=False, server_default='false', nullable=False)
     account_rel = relationship("Account", back_populates="emails")
 
     def __repr__(self):

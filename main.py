@@ -36,6 +36,8 @@ class AccountIn(BaseModel):
 class ToggleIn(BaseModel):
     is_active: bool
 
+class ReadIn(BaseModel):
+    is_read: bool
 
 # ── Account routes ────────────────────────────────────────────────────────
 @app.get("/api/accounts")
@@ -48,6 +50,7 @@ def list_accounts(db: Session = Depends(get_db)):
             "provider":     acc.provider,
             "is_active":    acc.is_active,
             "created_at":   acc.created_at,
+            "unread_count": crud.get_unread_count(db, acc.id),
             "total_emails": len(acc.emails),
             "last_active":  acc.emails[0].received_at.isoformat() if acc.emails and acc.emails[0].received_at else None,
         }
@@ -65,6 +68,13 @@ def toggle_account(account_id: int, body: ToggleIn, db: Session = Depends(get_db
     if not acc:
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": "Updated", "is_active": acc.is_active}
+
+@app.patch("/api/emails/{email_id}/read")
+def mark_email_read(email_id: int, body: ReadIn, db: Session = Depends(get_db)):
+    email = crud.mark_email_read(db, email_id, body.is_read)
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return {"message": "Updated", "is_read": email.is_read}
 
 @app.delete("/api/accounts/{account_id}")
 def delete_account(account_id: int, db: Session = Depends(get_db)):
@@ -95,7 +105,8 @@ def list_emails(db: Session = Depends(get_db)):
             "received_at":  e.received_at.isoformat() if e.received_at else None,
             "forwarded_at": e.forwarded_at,
             "status":       e.status,
-            "folder":       e.folder
+            "folder":       e.folder,
+            "is_read":      e.is_read,
         }
         for e in emails
     ]
@@ -114,8 +125,10 @@ def list_emails_by_account(account_id: int, db: Session = Depends(get_db)):
             "from":         e.from_address,
             "subject":      e.subject,
             "body":         e.body,
+            "is_read":      e.is_read,
             "received_at":  e.received_at.isoformat() if e.received_at else None,
             "forwarded_at": e.forwarded_at,
+            "folder":       e.folder,
             "status":       e.status,
         }
         for e in emails
