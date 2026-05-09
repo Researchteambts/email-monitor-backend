@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from dateutil import parser as dateparser
 from dotenv import load_dotenv
 
 from database import SessionLocal
@@ -173,7 +174,11 @@ def check_account(account, db):
 
                 subject     = original_msg.get("Subject", "(no subject)")
                 sender      = original_msg.get("From",    "unknown")
-                received_at = original_msg.get("Date",    "")
+                received_at_raw = original_msg.get("Date", "")
+                try:
+                    received_at = dateparser.parse(received_at_raw)
+                except Exception:
+                    received_at = None
                 body        = extract_body(original_msg)
 
                 print(f"    [{folder}] New email: {subject}")

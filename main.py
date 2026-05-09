@@ -49,7 +49,7 @@ def list_accounts(db: Session = Depends(get_db)):
             "is_active":    acc.is_active,
             "created_at":   acc.created_at,
             "total_emails": len(acc.emails),
-            "last_active":  acc.emails[0].forwarded_at if acc.emails else None,
+            "last_active":  acc.emails[0].received_at.isoformat() if acc.emails and acc.emails[0].received_at else None,
         }
         for acc in accounts
     ]
@@ -86,7 +86,7 @@ def list_emails(db: Session = Depends(get_db)):
             "from":         e.from_address,
             "subject":      e.subject,
             "body":         e.body,
-            "received_at":  e.received_at,
+            "received_at":  e.received_at.isoformat() if e.received_at else None,
             "forwarded_at": e.forwarded_at,
             "status":       e.status,
             "folder":       e.folder
@@ -108,7 +108,7 @@ def list_emails_by_account(account_id: int, db: Session = Depends(get_db)):
             "from":         e.from_address,
             "subject":      e.subject,
             "body":         e.body,
-            "received_at":  e.received_at,
+            "received_at":  e.received_at.isoformat() if e.received_at else None,
             "forwarded_at": e.forwarded_at,
             "status":       e.status,
         }
